@@ -16,8 +16,10 @@ from PyPDF2 import PdfReader
 from groq import Groq
 
 # ----------- Config ------------
-# Paste your API key here
-client = Groq(api_key="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")  # <-- Add your Groq API key
+import os
+from groq import Groq
+
+client = Groq(api_key=os.environ.get("GROQ_API_KEY", ""))
 
 STORE_ROOT = Path("faiss_store")
 STORE_ROOT.mkdir(exist_ok=True)
