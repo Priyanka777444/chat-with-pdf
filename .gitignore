@@ -5,13 +5,7 @@ __pycache__/
 *.pyd
 .env
 
-# FAISS store
-faiss_store/
 
-# Virtual environment
-venv/
-env/
-.venv/
 
 # OS files
 .DS_Store

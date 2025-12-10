@@ -5,3 +5,4 @@ pypdf
 langchain_groq
 langchain_google_genai
 python-dotenv
+sentence-transformers
