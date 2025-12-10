@@ -14,26 +14,22 @@ import streamlit as st
 from sentence_transformers import SentenceTransformer
 from PyPDF2 import PdfReader
 from groq import Groq
+from dotenv import load_dotenv
 
-# ----------- Config ------------
-import os
-from groq import Groq
-
-client = Groq(api_key=os.environ.get("GROQ_API_KEY", ""))
+# ---------------- Config ----------------
+load_dotenv() 
+client = Groq(api_key=os.environ.get("GROQ_API_KEY", ""))  # Use environment variable
 
 STORE_ROOT = Path("faiss_store")
 STORE_ROOT.mkdir(exist_ok=True)
 EMBED_MODEL = "all-MiniLM-L6-v2"
 K_RETRIEVE = 4
 
-# ----------- Session State ------------
-if "history" not in st.session_state:
-    st.session_state.history = []
+# ---------------- Session State ----------------
+st.session_state.setdefault("history", [])
+st.session_state.setdefault("active_pdf", None)
 
-if "active_pdf" not in st.session_state:
-    st.session_state.active_pdf = None
-
-# ----------- Utilities ------------
+# ---------------- Utilities ----------------
 def slugify(name: str) -> str:
     name = name.strip()
     name = re.sub(r"[^\w\s-]", "", name).strip().lower()
@@ -132,43 +128,30 @@ Answer:"""
     except Exception as e:
         return f"Groq request error: {str(e)}"
 
-# ----------- Streamlit UI ------------
+# ---------------- Streamlit UI ----------------
 st.set_page_config(page_title="Chat with PDF", layout="wide")
 st.title("📘 Chat with PDF")
 
-# CSS for chat bubbles
-bubble_css = """
-<style>
-body { background-color: #f6f8fa; }
-.chat-container { max-width:900px; margin: 0 auto; }
-.user-bubble { background: #0b81ff; color: #fff; padding:12px; border-radius:16px; float:right; margin:8px; max-width:80%; }
-.assistant-bubble { background: #e6e6e6; color: #000; padding:12px; border-radius:16px; float:left; margin:8px; max-width:80%; }
-.clear { clear: both; }
-</style>
-"""
-st.markdown(bubble_css, unsafe_allow_html=True)
-
-# -------- Sidebar ------------
+# Sidebar for uploading PDFs and managing indexes
 with st.sidebar:
     st.header("Controls")
     st.subheader("Upload PDF(s)")
-    uploaded_files = st.file_uploader("Choose one or more PDFs", accept_multiple_files=True, type=["pdf"])
+    uploaded_files = st.file_uploader("Choose PDFs", accept_multiple_files=True, type=["pdf"])
     if uploaded_files:
         for up in uploaded_files:
-            display_name = up.name
-            slug = slugify(display_name)
+            slug = slugify(up.name)
             folder = STORE_ROOT / slug
             if (folder / "index.faiss").exists():
-                st.info(f"Already ingested: {display_name}")
+                st.info(f"Already ingested: {up.name}")
                 continue
             with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
                 tmp.write(up.read())
                 tmp_path = tmp.name
-            st.info(f"Ingesting {display_name}...")
+            st.info(f"Ingesting {up.name}...")
             text = extract_pdf_text(tmp_path)
-            chunks = chunk_text(text, chunk_size=1000, overlap=200)
+            chunks = chunk_text(text)
             build_index_for_pdf(folder, chunks)
-            st.success(f"Ingested {display_name} ({len(chunks)} chunks)")
+            st.success(f"Ingested {up.name} ({len(chunks)} chunks)")
 
     st.markdown("---")
     st.subheader("Select active PDF")
@@ -176,7 +159,6 @@ with st.sidebar:
     if indexes:
         slugs = [t[0] for t in indexes]
         options = [f"{name} ({meta.get('chunks','?')} chunks)" for (name, meta) in indexes]
-
         selected_slug = st.selectbox(
             "Active PDF",
             options=slugs,
@@ -195,9 +177,8 @@ with st.sidebar:
         st.download_button("⬇ Download history (JSON)", data=json.dumps(st.session_state.history, indent=2, ensure_ascii=False),
                            file_name="chat_history.json", mime="application/json")
 
-# -------- Main Chat ----------
+# Main chat interface
 col1, col2 = st.columns([3, 1])
-
 with col1:
     st.subheader("Conversation")
     chat_placeholder = st.empty()
@@ -212,7 +193,6 @@ with col1:
 
     render_history()
 
-    # Use form to avoid session_state issues
     with st.form(key="ask_form", clear_on_submit=True):
         user_input = st.text_input("Ask a question about the active PDF:")
         submit_btn = st.form_submit_button("Ask")
@@ -242,13 +222,11 @@ with col1:
 
                     # Simulated streaming
                     displayed = ""
-                    chunk_chars = 16
-                    delay = 0.02
-                    for i in range(0, len(full_answer), chunk_chars):
-                        displayed += full_answer[i:i+chunk_chars]
+                    for i in range(0, len(full_answer), 16):
+                        displayed += full_answer[i:i+16]
                         st.session_state.history[-1]["assistant"] = displayed
                         render_history()
-                        time.sleep(delay)
+                        time.sleep(0.02)
                     st.session_state.history[-1]["assistant"] = full_answer
                     render_history()
 
@@ -258,8 +236,8 @@ with col2:
         st.info("No active PDF selected.")
     else:
         folder = STORE_ROOT / st.session_state.active_pdf
-        meta = {}
         meta_path = folder / "meta.json"
+        meta = {}
         if meta_path.exists():
             try:
                 meta = json.loads(meta_path.read_text(encoding="utf8"))
