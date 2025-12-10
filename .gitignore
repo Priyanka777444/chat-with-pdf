@@ -1,12 +1,45 @@
-# Python
+# Python cache
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
 *.pyd
-.env
+*.so
 
+# Virtual environments
+venv/
+env/
+.venv/
+.env/
 
+# IDE / Editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
 
-# OS files
+# System files
 .DS_Store
 Thumbs.db
+
+# Logs
+*.log
+
+# FAISS and PDF index folders
+faiss_store/
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+
+# PDF uploads (optional)
+*.pdf
+
+# Pickle and other serialized data
+*.pkl
+
+# Streamlit cache
+.streamlit/
+
+# Jupyter notebooks checkpoints
+.ipynb_checkpoints/
