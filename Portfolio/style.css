@@ -1,0 +1,332 @@
+/* -----------------------------------------------------------
+   GLOBAL VARIABLES & RESET
+   Theme: "AI Energy" (Electric Violet to Blue)
+----------------------------------------------------------- */
+:root {
+    --primary-color: #4f46e5; /* Fallback */
+    --primary-gradient: linear-gradient(135deg, #4f46e5 0%, #8b5cf6 100%); /* Indigo to Violet */
+    --secondary-color: #64748b;
+    --text-color: #1e293b;
+    --background-color: #f8fafc;
+    --card-background: #ffffff;
+    --border-color: #e2e8f0;
+    --nav-bg: rgba(255, 255, 255, 0.95); /* Semi-transparent for blur */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    --shadow-glow: 0 0 15px rgba(79, 70, 229, 0.3); /* Glow effect */
+    --font-family: 'Roboto', sans-serif;
+}
+
+/* DARK MODE VARIABLES - The "Hacker/Dev" Look */
+.dark-mode {
+    --text-color: #f1f5f9;
+    --background-color: #0f172a; /* Deep Slate */
+    --card-background: #1e293b;
+    --border-color: #334155;
+    --secondary-color: #94a3b8;
+    --nav-bg: rgba(15, 23, 42, 0.95);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+    --shadow-glow: 0 0 20px rgba(139, 92, 246, 0.4);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+    font-family: var(--font-family);
+    line-height: 1.7;
+    color: var(--text-color);
+    background-color: var(--background-color);
+    transition: background-color 0.3s ease, color 0.3s ease;
+    overflow-x: hidden; /* Prevent horizontal scroll from animations */
+}
+
+/* -----------------------------------------------------------
+   TYPOGRAPHY & UTILITIES
+----------------------------------------------------------- */
+h1, h2, h3, h4, h5 {
+    font-weight: 700;
+    margin-bottom: 1rem;
+    line-height: 1.2;
+}
+
+/* Energetic Gradient Text for Key Headers */
+h1, h2 span, h3 {
+    background: var(--primary-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    display: inline-block; /* Required for gradient text */
+}
+
+a { text-decoration: none; color: inherit; transition: all 0.3s ease; }
+ul { list-style: none; }
+
+.container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+.section-padding { padding: 100px 0; }
+.background-alt { background-color: rgba(0,0,0,0.02); } /* Subtle difference */
+.dark-mode .background-alt { background-color: rgba(255,255,255,0.02); }
+
+/* -----------------------------------------------------------
+   BUTTONS (Energetic Gradients)
+----------------------------------------------------------- */
+.btn-primary {
+    background: var(--primary-gradient);
+    color: white;
+    padding: 12px 28px;
+    border: none;
+    border-radius: 50px; /* Modern pill shape */
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 1rem;
+    box-shadow: var(--shadow-glow);
+    transition: transform 0.2s, box-shadow 0.2s;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.btn-primary:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 20px rgba(79, 70, 229, 0.4);
+}
+
+.project-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #4f46e5;
+    font-weight: 600;
+    margin-top: 15px;
+}
+.dark-mode .project-link { color: #a78bfa; }
+.project-link:hover { gap: 12px; /* Link arrow moves on hover */ }
+
+/* -----------------------------------------------------------
+   NAVBAR (Glassmorphism)
+----------------------------------------------------------- */
+header {
+    background-color: var(--nav-bg);
+    backdrop-filter: blur(10px); /* The "Frosted Glass" effect */
+    -webkit-backdrop-filter: blur(10px);
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.nav-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+}
+
+nav a {
+    margin-left: 30px;
+    font-weight: 500;
+    position: relative;
+    color: var(--text-color);
+}
+
+/* Animated Underline for Nav Links */
+nav a::after {
+    content: '';
+    position: absolute;
+    width: 0;
+    height: 2px;
+    bottom: -5px;
+    left: 0;
+    background: var(--primary-gradient);
+    transition: width 0.3s;
+}
+nav a:hover::after { width: 100%; }
+
+.toggle-btn {
+    background: none; border: none; font-size: 1.2rem; cursor: pointer; color: var(--text-color); margin-left: 20px;
+}
+.toggle-btn:hover { color: #8b5cf6; transform: rotate(15deg); }
+
+/* -----------------------------------------------------------
+   HERO SECTION
+----------------------------------------------------------- */
+.hero {
+    min-height: 90vh; /* Almost full screen */
+    display: flex;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Tech Background Pattern */
+.hero::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -20%;
+    width: 600px;
+    height: 600px;
+    background: var(--primary-gradient);
+    filter: blur(80px); /* Giant colorful blob */
+    opacity: 0.15;
+    border-radius: 50%;
+    z-index: -1;
+    animation: floatBlob 10s infinite alternate;
+}
+
+@keyframes floatBlob {
+    0% { transform: translate(0, 0); }
+    100% { transform: translate(-30px, 50px); }
+}
+
+.hero .container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 50px;
+    width: 100%;
+}
+
+.hero-content h2 { font-size: 4rem; margin-bottom: 10px; line-height: 1.1; }
+.hero-content .summary { font-size: 1.25rem; color: var(--secondary-color); margin-bottom: 35px; max-width: 600px; }
+
+/* Social Icons with Pop */
+.contact-links a {
+    font-size: 1.8rem;
+    margin-right: 25px;
+    color: var(--text-color);
+    display: inline-block;
+}
+.contact-links a:hover {
+    color: #4f46e5;
+    transform: translateY(-5px) scale(1.1);
+}
+
+/* Hero Image with Glow */
+.hero-image {
+    position: relative;
+    width: 350px;
+    height: 350px;
+    padding: 10px;
+    background: white; /* Border color */
+    border-radius: 50%;
+    box-shadow: var(--shadow-glow);
+    animation: pulseGlow 3s infinite;
+}
+.dark-mode .hero-image { background: #1e293b; }
+
+@keyframes pulseGlow {
+    0% { box-shadow: 0 0 15px rgba(79, 70, 229, 0.2); }
+    50% { box-shadow: 0 0 30px rgba(79, 70, 229, 0.5); }
+    100% { box-shadow: 0 0 15px rgba(79, 70, 229, 0.2); }
+}
+
+/* -----------------------------------------------------------
+   CARDS (Projects, Skills, Certs)
+----------------------------------------------------------- */
+.project-card, .cert-card, .skill-category, .timeline-content {
+    background: var(--card-background);
+    border: 1px solid var(--border-color);
+    padding: 30px;
+    border-radius: 16px; /* Smoother corners */
+    box-shadow: var(--shadow-sm);
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Hover "Lift" Effect */
+.project-card:hover, .cert-card:hover, .skill-category:hover, .timeline-content:hover {
+    transform: translateY(-10px); /* Move up */
+    box-shadow: var(--shadow-lg); /* Big shadow */
+    border-color: #8b5cf6; /* Purple border on hover */
+}
+
+/* Little color bar on top of cards */
+.project-card::before, .cert-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 4px;
+    background: var(--primary-gradient);
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+.project-card:hover::before, .cert-card:hover::before { opacity: 1; }
+
+.skills-grid, .project-grid, .cert-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 30px;
+    margin-top: 40px;
+}
+
+/* Tags in Projects */
+.project-tech span {
+    background: rgba(79, 70, 229, 0.1);
+    color: #4f46e5;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-right: 8px;
+    display: inline-block;
+    margin-bottom: 8px;
+}
+.dark-mode .project-tech span { background: rgba(139, 92, 246, 0.2); color: #c4b5fd; }
+
+/* -----------------------------------------------------------
+   TIMELINE
+----------------------------------------------------------- */
+.timeline { position: relative; padding: 20px 0; margin-top: 40px; border-left: 3px solid var(--border-color); margin-left: 20px; }
+.timeline-item { margin-bottom: 40px; padding-left: 40px; position: relative; }
+
+/* The Dot on the timeline */
+.timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -10px; /* Aligns with border */
+    top: 0;
+    width: 16px; height: 16px;
+    background: var(--primary-gradient);
+    border-radius: 50%;
+    border: 3px solid var(--background-color);
+}
+
+/* -----------------------------------------------------------
+   CONTACT FORM
+----------------------------------------------------------- */
+.contact-form {
+    background: var(--card-background);
+    padding: 40px;
+    border-radius: 16px;
+    box-shadow: var(--shadow-lg);
+    max-width: 600px;
+    margin: 40px auto;
+    border: 1px solid var(--border-color);
+}
+.form-group input, .form-group textarea {
+    width: 100%; padding: 15px; border-radius: 8px;
+    border: 2px solid var(--border-color);
+    background: var(--background-color);
+    color: var(--text-color);
+    font-family: inherit;
+    transition: border-color 0.3s;
+}
+.form-group input:focus, .form-group textarea:focus {
+    outline: none; border-color: #4f46e5;
+}
+
+/* -----------------------------------------------------------
+   ANIMATIONS (The Scroll Magic)
+----------------------------------------------------------- */
+.hidden { opacity: 0; transform: translateY(30px); transition: all 0.8s ease-out; }
+.show { opacity: 1; transform: translateY(0); }
+
+/* Mobile Response */
+@media (max-width: 768px) {
+    .hero .container { flex-direction: column-reverse; text-align: center; }
+    .hero-content h2 { font-size: 2.5rem; }
+    .hero-image { width: 250px; height: 250px; margin-bottom: 30px; }
+    .nav-container { flex-direction: column; }
+    nav { margin-top: 20px; }
+    nav a { margin: 0 10px; }
+}
