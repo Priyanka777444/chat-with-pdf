@@ -1,0 +1,19 @@
+Amit Desai
+amit.desai@example.com
++1 (415) 555-0123
+San Francisco, CA
+
+Summary:
+Senior Backend Engineer with 6+ years of experience building scalable APIs, microservices and recommender systems.
+
+Experience:
+Senior Backend Engineer, DataWorks (2019 - Present)
+- Designed and maintained high-throughput data ingestion pipelines.
+- Implemented recommendation microservices using collaborative filtering.
+
+Education:
+M.S. Computer Science, UC Berkeley (2016-2018)
+B.Tech, IIT Bombay (2012-2016)
+
+Skills:
+Python, Java, Kubernetes, AWS, PostgreSQL, Redis, Docker

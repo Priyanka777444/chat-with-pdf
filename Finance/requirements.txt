@@ -1,0 +1,8 @@
+streamlit>=1.25
+spacy>=3.5
+pdfplumber>=0.7.5
+python-docx>=0.8.11
+phonenumbers>=8.12.60
+sentence-transformers>=2.2.2
+torch>=1.13
+regex

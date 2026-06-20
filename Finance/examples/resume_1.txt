@@ -1,0 +1,21 @@
+Priyanka Late
+Email: priyankalate348@gmail.com
+Phone: +91 98765 43210
+Location: Modasa, Gujarat, India
+
+Professional Summary:
+Aspiring AI Developer with experience building computer vision and NLP projects. Built "Unisign" and a face-recognition pipeline. Experienced with Python, PyTorch, and spaCy.
+
+Experience:
+AI Intern, InvisiHome, Jun 2024 - Aug 2024
+- Built backend model for housing inclusion radar.
+- Implemented data pipelines and evaluation.
+
+Research Intern, UniTech, Jan 2023 - May 2023
+- Worked on object detection using YOLO.
+
+Education:
+B.Tech Computer Engineering, Government Engineering College, Modasa (2022 - Present)
+
+Skills:
+Python, PyTorch, OpenCV, NLP, spaCy, Machine Learning, Deep Learning, Docker
