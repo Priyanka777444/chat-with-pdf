@@ -1,31 +1,151 @@
-# 📘 Chat with PDF
+# Chat with PDF
 
-A Streamlit app that allows users to upload PDFs and chat with their content using **FAISS**, **SentenceTransformers**, and **Groq AI**.
+A lightweight Retrieval-Augmented Generation (RAG) application built with Streamlit that lets you upload PDFs, ask questions about their content, and get context-aware answers powered by semantic search and a large language model.
 
----
-
-## **Features**
-
-- Upload multiple PDF files
-- Extract text and split into chunks
-- Create FAISS vector indexes for semantic search
-- Ask questions about the PDF content
-- Chat history with download options (TXT / JSON)
-- Dynamic embedding using **SentenceTransformer**
-- Optional AI answer generation with **Groq API**
+**Live demo:** [chat-with-pdf.streamlit.app](https://chat-with-pdf-kgryg7fexdbj3dl7o7jgq4.streamlit.app/)
 
 ---
 
-## **Demo**
+## Architecture
 
-You can try the app here: [Chat with PDF](https://chat-with-pdf-kgryg7fexdbj3dl7o7jgq4.streamlit.app/)
+The application implements a classic RAG pipeline:
+
+```
+PDF Upload ──► Text Extraction ──► Chunking ──► Embedding ──► FAISS Index ──► Semantic Retrieval ──► Groq LLM ──► Answer
+                                          ▲                                ▲
+                                     SentenceTransformers            all-MiniLM-L6-v2
+```
+
+| Step | Implementation |
+|---|---|
+| **PDF ingestion** | `PyPDF2.PdfReader` extracts raw text from uploaded PDFs. |
+| **Text chunking** | Overlapping fixed-size chunks (1000 characters, 200 overlap) using a sliding window. |
+| **Embedding** | `SentenceTransformers` with `all-MiniLM-L6-v2` — a fast, lightweight model that produces 384-dim vectors. |
+| **Vector index** | FAISS `IndexFlatL2` — brute-force L2 distance search over stored embeddings. |
+| **Retrieval** | Top-4 most similar chunks are fetched for each query. |
+| **Answer generation** | Retrieved chunks + conversation history are sent to Groq's `llama-3.3-70b-versatile` with an instruction to answer only from the provided context. |
 
 ---
 
-## **Installation (Local)**
+## Tech Decisions
 
-1. Clone the repository:
+| Tool | Why this choice? |
+|---|---|
+| **FAISS** (not Pinecone / Weaviate / Chroma) | FAISS is a local, in-process vector index that requires zero cloud infrastructure, no API keys, and no network calls during search. The entire index fits on disk in `faiss_store/`. This keeps deployment free on Streamlit Community Cloud and eliminates per-query indexing costs. |
+| **SentenceTransformers** (not OpenAI `text-embedding-3-small`) | `all-MiniLM-L6-v2` runs entirely on CPU, produces high-quality 384-dim embeddings, and avoids per-query API charges. For a hobby/portfolio project this makes the app fully self-contained with no recurring embedding costs. |
+| **Groq API** (not OpenAI / Anthropic) | Groq offers free-tier access to Llama-3.3-70B with extremely fast inference speeds. For a demo app this provides high-quality answers at zero cost. |
+| **PyPDF2** (not pdfplumber / PyMuPDF / Unstructured) | PyPDF2 is already included in many environments, requires no system dependencies (no poppler, no muPDF), and handles the typical single-column PDFs the app targets. |
+| **Streamlit** (not Gradio / Flask) | Streamlit provides a chat-like UI with minimal boilerplate. Files, forms, and session state are first-class citizens, making it trivial to build the multi-PDF upload + chat workflow in a single file. |
+| **Pickle** (not SQLite / JSON for chunks) | Chunk text is stored as a pickled list alongside the FAISS binary index. This is the simplest possible persistence layer — two files to read/write with zero schema management. |
+
+---
+
+## Features
+
+- **Multi-PDF upload** — drag-and-drop several PDFs at once; each gets its own FAISS index.
+- **Active PDF selector** — switch between ingested PDFs in the sidebar; questions are answered against the active one.
+- **Index rebuild** — re-upload a PDF to overwrite its index (triggered via sidebar re-upload).
+- **Chunk export** — download any PDF's indexed chunks as a JSON file.
+- **Chat history** — full conversation visible in the UI; exportable as TXT or JSON.
+- **Streaming-style answers** — answers appear character-by-character for a natural feel.
+
+---
+
+## Setup (Local)
+
+1. **Clone the repository**
+
+   ```bash
+   git clone https://github.com/Priyanka777444/chat-with-pdf.git
+   cd chat-with-pdf
+   ```
+
+2. **Create and activate a virtual environment** (recommended)
+
+   ```bash
+   python -m venv venv
+   # Windows:
+   venv\Scripts\activate
+   # macOS / Linux:
+   source venv/bin/activate
+   ```
+
+3. **Install dependencies**
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Set your Groq API key**
+
+   Create a `.env` file in the project root:
+
+   ```env
+   GROQ_API_KEY="gsk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+   ```
+
+   Get a free key at [console.groq.com](https://console.groq.com).
+
+5. **Run the app**
+
+   ```bash
+   streamlit run app.py
+   ```
+
+   Open `http://localhost:8501` in your browser.
+
+---
+
+## Running with Docker
 
 ```bash
-git clone https://github.com/Priyanka777444/chat-with-pdf.git
-cd chat-with-pdf
+docker build -t chat-with-pdf .
+docker run -p 8501:8501 --env-file .env chat-with-pdf
+```
+
+---
+
+## Results (Retrieval Accuracy)
+
+*Fill in after running `python eval.py` — the script checks whether the top retrieved chunk contains the expected answer for a set of sample queries.*
+
+| Metric | Value |
+|---|---|
+| Number of test queries | 10 |
+| Retrieval accuracy (top-1) | **X/10** — `%` |
+| Date evaluated | YYYY-MM-DD |
+| Test PDF used | `filename.pdf` |
+
+### Sample queries & results
+
+*Generated by `eval.py` — update the table below after running.*
+
+| # | Question | Expected answer in chunk | Top chunk contains it? |
+|---|---|---|---|
+| 1 | ... | ... | ✅ / ❌ |
+| 2 | ... | ... | ✅ / ❌ |
+| … | … | … | … |
+
+---
+
+## Project Structure
+
+```
+chat-with-pdf/
+├── app.py                    # Main Streamlit application
+├── eval.py                   # Retrieval accuracy evaluator
+├── requirements.txt          # Python dependencies
+├── Dockerfile                # Container build
+├── .env                      # Groq API key (not committed)
+├── .gitignore
+├── README.md
+└── faiss_store/              # Persistent vector indexes (auto-created)
+    └── <pdf-slug>/
+        ├── index.faiss       # FAISS binary index
+        ├── docs.pkl          # Chunked text (pickled list)
+        └── meta.json         # Metadata (chunk count, timestamp)
+```
+
+---
+
+Built with [FAISS](https://github.com/facebookresearch/faiss) + [SentenceTransformers](https://www.sbert.net/) + [Groq](https://groq.com/).
