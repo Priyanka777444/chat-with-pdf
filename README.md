@@ -1,3 +1,13 @@
+---
+title: Chat with PDF
+emoji: 📄
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Chat with PDF
 
 A lightweight Retrieval-Augmented Generation (RAG) application built with Streamlit that lets you upload PDFs, ask questions about their content, and get context-aware answers powered by semantic search and a large language model.
