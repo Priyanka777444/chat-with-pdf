@@ -1,87 +1,49 @@
 """
-eval.py - Retrieval accuracy evaluator for the Chat-with-PDF RAG pipeline.
+eval.py - Retrieval accuracy evaluator for the Chat-with-PDF RAG pipeline,
+with MLflow experiment tracking.
 
 Usage:
-    python eval.py                              # uses the first available index
-    python eval.py --pdf my-document-slug       # uses a specific PDF index
+    python eval.py                              # uses the first available index, top_k=1
+    python eval.py --pdf my-document-slug --top-k 3
 
-This script:
-    1. Loads the FAISS index + chunks for the chosen PDF.
-    2. Runs a set of sample questions through the retrieval pipeline (without
-       calling the Groq LLM -- only the embedding + FAISS search).
-    3. For each question, checks whether the expected answer text appears in
-       the *top-1 retrieved chunk*.
-    4. Prints a per-query pass/fail and an overall accuracy score.
-
-    Edit the QA_PAIRS list below to match the actual content of your PDF(s).
+    Edit QA_PAIRS below to match REAL content from the PDF you're testing
+    against -- placeholders will all fail and give meaningless numbers.
 """
 
 import argparse
 import json
 import pickle
 import sys
+import time
 from pathlib import Path
 
 import faiss
-import numpy as np
+import mlflow
 from sentence_transformers import SentenceTransformer
 
 
 STORE_ROOT = Path("faiss_store")
 EMBED_MODEL = "all-MiniLM-L6-v2"
-TOP_K = 1  # top-1 retrieval accuracy
 
 
 # ---------------------------------------------------------------------------
-# TODO: Replace these with real Q&A pairs from your PDF(s).
+# TODO: Replace with REAL Q&A pairs matching the PDF you're testing against.
+# Example, for the Employee Management System SRS doc:
+#   {"question": "What is this document about?", "expected": "employee management"}
 # ---------------------------------------------------------------------------
 QA_PAIRS = [
-    {
-        "question": "What is the main topic of this document?",
-        "expected": "the main subject or title of the PDF",
-    },
-    {
-        "question": "Who is the author of this document?",
-        "expected": "the author's name",
-    },
-    {
-        "question": "What year was this document published?",
-        "expected": "the publication year",
-    },
-    {
-        "question": "What is the key conclusion of the document?",
-        "expected": "the main conclusion or finding",
-    },
-    {
-        "question": "How many sections does the document have?",
-        "expected": "the number of sections or chapters",
-    },
-    {
-        "question": "What methodology is used in this document?",
-        "expected": "the research methodology described",
-    },
-    {
-        "question": "What is the sample size discussed?",
-        "expected": "the sample size number",
-    },
-    {
-        "question": "What datasets were used in the analysis?",
-        "expected": "the dataset name or source",
-    },
-    {
-        "question": "What is a key limitation mentioned?",
-        "expected": "a limitation or caveat described",
-    },
-    {
-        "question": "What future work is suggested?",
-        "expected": "the proposed future research direction",
-    },
+    {"question": "What does AI stand for?", "expected": "artificial intelligence"},
+    {"question": "What is the goal of AI?", "expected": "simulate human intelligence"},
+    {"question": "What is machine learning?", "expected": "learn from data"},
+    {"question": "What are neural networks?", "expected": "inspired by the human brain"},
+    {"question": "What is deep learning?", "expected": "multiple layers"},
+    {"question": "What is natural language processing?", "expected": "understand human language"},
+    {"question": "What is computer vision?", "expected": "interpret visual information"},
+    {"question": "What is reinforcement learning?", "expected": "reward"},
+    {"question": "What is supervised learning?", "expected": "labeled data"},
+    {"question": "What is unsupervised learning?", "expected": "unlabeled data"},
 ]
 
-
-# ---------------------------------------------------------------------------
-# Core retrieval logic (mirrors app.py's pipeline)
-# ---------------------------------------------------------------------------
 
 def load_index(folder: Path):
     idx_path = folder / "index.faiss"
@@ -109,13 +71,10 @@ def list_indexes():
     return sorted(folders, key=lambda x: x[0])
 
 
-# ---------------------------------------------------------------------------
-# Evaluation
-# ---------------------------------------------------------------------------
-
-def evaluate(index, chunks, embedder):
+def evaluate(index, chunks, embedder, top_k):
     results = []
     passed = 0
+    latencies = []
 
     print(f"{'#':>3}  {'Pass?':<6}  {'Question':<60}  {'Expected in top chunk':<60}")
     print("-" * 140)
@@ -124,54 +83,48 @@ def evaluate(index, chunks, embedder):
         q = pair["question"]
         expected = pair["expected"].lower()
 
-        # embed query
+        start = time.perf_counter()
         q_emb = embedder.encode([q]).astype("float32")
-        k = min(TOP_K, len(chunks))
+        k = min(top_k, len(chunks))
         _, indices = index.search(q_emb, k)
-        top_chunk = chunks[indices[0][0]].lower() if indices[0][0] < len(chunks) else ""
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        latencies.append(elapsed_ms)
 
-        found = expected in top_chunk
+        retrieved_text = " ".join(
+            chunks[idx].lower() for idx in indices[0] if idx < len(chunks)
+        )
+        found = expected in retrieved_text
         if found:
             passed += 1
 
         label = "✅ PASS" if found else "❌ FAIL"
         print(f"{i:>3}  {label:<6}  {q:<60}  {expected[:60]:<60}")
-        results.append({"question": q, "expected": expected, "found": found})
+        results.append({"question": q, "expected": expected, "found": found, "latency_ms": elapsed_ms})
 
     total = len(results)
     accuracy = passed / total * 100
+    avg_latency = sum(latencies) / len(latencies)
     print("-" * 140)
-    print(f"\nResults: {passed}/{total}  ({accuracy:.1f}%)")
-    return accuracy
+    print(f"\nResults: {passed}/{total}  ({accuracy:.1f}%)  |  Avg retrieval latency: {avg_latency:.1f}ms")
+    return accuracy, avg_latency, results
 
-
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Evaluate retrieval accuracy of Chat-with-PDF RAG pipeline."
-    )
-    parser.add_argument(
-        "--pdf",
-        type=str,
-        default=None,
-        help="PDF slug (folder name under faiss_store/). Defaults to first available index.",
-    )
+    parser = argparse.ArgumentParser(description="Evaluate retrieval accuracy of Chat-with-PDF RAG pipeline.")
+    parser.add_argument("--pdf", type=str, default=None, help="PDF slug under faiss_store/.")
+    parser.add_argument("--top-k", type=int, default=1, help="Number of chunks to retrieve per query.")
     args = parser.parse_args()
 
-    # locate the index
     if args.pdf:
         folder = STORE_ROOT / args.pdf
         if not folder.exists():
             print(f"Error: folder 'faiss_store/{args.pdf}' does not exist.")
             sys.exit(1)
+        folder_name = args.pdf
     else:
         indexes = list_indexes()
         if not indexes:
-            print("Error: no FAISS indexes found in faiss_store/.")
-            print("Upload at least one PDF through the app first, then re-run eval.")
+            print("Error: no FAISS indexes found. Upload a PDF through the app first.")
             sys.exit(1)
         folder_name = indexes[0][0]
         folder = STORE_ROOT / folder_name
@@ -183,12 +136,25 @@ def main():
         sys.exit(1)
 
     print(f"Loaded index with {len(chunks)} chunks.\n")
-    print("=" * 140)
-    print("  Retrieval accuracy evaluation (top-1, no LLM call)")
-    print("=" * 140)
 
     embedder = SentenceTransformer(EMBED_MODEL)
-    evaluate(index, chunks, embedder)
+
+    mlflow.set_experiment("chat-with-pdf-retrieval-eval")
+    with mlflow.start_run(run_name=f"{folder_name}_top{args.top_k}"):
+        mlflow.log_param("pdf_folder", folder_name)
+        mlflow.log_param("embed_model", EMBED_MODEL)
+        mlflow.log_param("top_k", args.top_k)
+        mlflow.log_param("num_chunks", len(chunks))
+        mlflow.log_param("num_questions", len(QA_PAIRS))
+
+        accuracy, avg_latency, results = evaluate(index, chunks, embedder, args.top_k)
+
+        mlflow.log_metric("retrieval_accuracy_pct", accuracy)
+        mlflow.log_metric("avg_query_latency_ms", avg_latency)
+
+        results_path = Path("eval_results.json")
+        results_path.write_text(json.dumps(results, indent=2))
+        mlflow.log_artifact(str(results_path))
 
 
 if __name__ == "__main__":

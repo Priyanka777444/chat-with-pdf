@@ -1,0 +1,62 @@
+[
+  {
+    "question": "What does AI stand for?",
+    "expected": "artificial intelligence",
+    "found": true,
+    "latency_ms": 237.40759999782313
+  },
+  {
+    "question": "What is the goal of AI?",
+    "expected": "simulate human intelligence",
+    "found": false,
+    "latency_ms": 42.14230000070529
+  },
+  {
+    "question": "What is machine learning?",
+    "expected": "learn from data",
+    "found": false,
+    "latency_ms": 39.21989999798825
+  },
+  {
+    "question": "What are neural networks?",
+    "expected": "inspired by the human brain",
+    "found": false,
+    "latency_ms": 37.46169999794802
+  },
+  {
+    "question": "What is deep learning?",
+    "expected": "multiple layers",
+    "found": false,
+    "latency_ms": 28.08250000089174
+  },
+  {
+    "question": "What is natural language processing?",
+    "expected": "understand human language",
+    "found": false,
+    "latency_ms": 88.24109999841312
+  },
+  {
+    "question": "What is computer vision?",
+    "expected": "interpret visual information",
+    "found": false,
+    "latency_ms": 53.946399995766114
+  },
+  {
+    "question": "What is reinforcement learning?",
+    "expected": "reward",
+    "found": false,
+    "latency_ms": 51.66960000497056
+  },
+  {
+    "question": "What is supervised learning?",
+    "expected": "labeled data",
+    "found": false,
+    "latency_ms": 34.74329999880865
+  },
+  {
+    "question": "What is unsupervised learning?",
+    "expected": "unlabeled data",
+    "found": false,
+    "latency_ms": 45.22530000394909
+  }
+]
