@@ -159,3 +159,4 @@ chat-with-pdf/
 ---
 
 Built with [FAISS](https://github.com/facebookresearch/faiss) + [SentenceTransformers](https://www.sbert.net/) + [Groq](https://groq.com/).
+May take ~30 seconds to wake up
