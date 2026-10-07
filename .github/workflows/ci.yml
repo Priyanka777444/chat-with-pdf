@@ -37,7 +37,7 @@ jobs:
             --statistics
 
       - name: Run tests
-        run: pytest -q tests
+        run: python -m pytest -q tests
 
       - name: Build Docker image
         run: docker build -t chat-with-pdf .
