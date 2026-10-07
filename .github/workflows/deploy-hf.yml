@@ -13,6 +13,7 @@ jobs:
         run: |
           mkdir /tmp/space
           cp app.py rag_core.py requirements.txt Dockerfile README.md /tmp/space/
+          cp -r sample_store /tmp/space/
           cd /tmp/space
           git init -b main
           git config user.name "github-actions"
