@@ -1,20 +1,22 @@
 name: Deploy to Hugging Face Spaces
-
 on:
   push:
     branches: [ main ]
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Push to Hugging Face Spaces
+      - name: Push a clean snapshot to Hugging Face Spaces
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          git remote add space https://Priyankaslate:$HF_TOKEN@huggingface.co/spaces/Priyankaslate/chat-with-pdf
-          git push space main --force
+          mkdir /tmp/space
+          cp app.py rag_core.py requirements.txt Dockerfile README.md /tmp/space/
+          cd /tmp/space
+          git init -b main
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git add .
+          git commit -m "Deploy ${GITHUB_SHA}"
+          git push --force "https://Priyankaslate:${HF_TOKEN}@huggingface.co/spaces/Priyankaslate/chat-with-pdf" main
