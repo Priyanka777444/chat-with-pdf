@@ -23,6 +23,7 @@ CHUNK_SIZE = int(os.environ.get("RAG_CHUNK_SIZE", "1000"))
 CHUNK_OVERLAP = int(os.environ.get("RAG_CHUNK_OVERLAP", "200"))
 K_RETRIEVE = int(os.environ.get("RAG_K_RETRIEVE", "4"))
 STORE_ROOT = Path(os.environ.get("RAG_STORE_ROOT", "faiss_store"))
+SAMPLE_ROOT = Path(os.environ.get("RAG_SAMPLE_ROOT", "sample_store"))
 
 INDEX_FILE = "index.faiss"
 DOCS_FILE = "docs.pkl"
@@ -38,6 +39,7 @@ __all__ = [
     "INDEX_FILE",
     "K_RETRIEVE",
     "META_FILE",
+    "SAMPLE_ROOT",
     "STORE_ROOT",
     "STORE_VERSION",
     "TEXT_FILE",
@@ -49,6 +51,7 @@ __all__ = [
     "index_folder",
     "ingest_document",
     "list_indexes",
+    "list_sample_indexes",
     "load_index",
     "read_meta",
     "retrieve",
@@ -181,7 +184,7 @@ def build_index(
     index.add(embeddings)
 
     target = Path(folder)
-    if not target.is_absolute():
+    if not target.is_absolute() and Path(root) not in target.parents:
         target = Path(root) / target
     target.parent.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=f".{target.name}.", dir=str(target.parent)))
@@ -275,6 +278,13 @@ def list_indexes(root: Path = STORE_ROOT) -> List[Tuple[str, Dict[str, Any]]]:
             continue
         items.append((entry.name, read_meta(entry)))
     return items
+
+
+def list_sample_indexes() -> List[Tuple[str, Dict[str, Any]]]:
+    """Valid read-only sample indexes shipped with the app ([] when absent)."""
+    if not SAMPLE_ROOT.exists():
+        return []
+    return list_indexes(SAMPLE_ROOT)
 
 
 def retrieve(

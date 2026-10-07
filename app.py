@@ -5,8 +5,13 @@ Run with: streamlit run app.py
 
 import json
 import os
+import re
+import shutil
 import tempfile
-from typing import Dict, List, Tuple
+import time
+import uuid
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
 import streamlit as st
 
@@ -23,6 +28,8 @@ load_dotenv()
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "50"))
 NO_CONTEXT_ANSWER = "No context available to answer this question."
+SESSION_TTL_SECONDS = 24 * 60 * 60
+SESSION_DIR_RE = re.compile(r"^[0-9a-f]{32}$")
 
 
 @st.cache_resource(show_spinner="Loading embedding model...")
@@ -70,7 +77,7 @@ def answer_question(question: str, context: str, history: List[Dict[str, str]]) 
     """Return (answer, error); exactly one of the two is non-empty."""
     client = load_groq_client()
     if client is None:
-        return "", "GROQ_API_KEY is not configured. Add it to .env and restart the app."
+        return "", "GROQ_API_KEY is not configured. Set it in .env or the Space secrets."
     try:
         response = client.chat.completions.create(
             model=GROQ_MODEL,
@@ -94,25 +101,49 @@ def extract_pdf_bytes(data: bytes) -> str:
     return handle.name
 
 
-def ingest_upload(uploaded_file, force: bool) -> Tuple[str, str]:
-    """Return (level, message) where level is 'success', 'info' or 'error'."""
-    data = uploaded_file.getvalue()
-    if not data:
-        return "error", f"{uploaded_file.name}: file is empty."
-    if len(data) > MAX_UPLOAD_MB * 1024 * 1024:
-        return "error", f"{uploaded_file.name}: exceeds the {MAX_UPLOAD_MB}MB limit."
+def session_root() -> Path:
+    """Per-browser-session store: faiss_store/<session_id>/."""
+    return core.STORE_ROOT / st.session_state.session_id
 
-    slug = core.slugify(uploaded_file.name)
-    folder = core.STORE_ROOT / slug
-    if (folder / core.INDEX_FILE).exists() and not force:
-        return "info", f"{uploaded_file.name}: already indexed as '{slug}' (tick re-ingest to rebuild)."
+
+def doc_folder(kind: str, slug: str) -> Path:
+    """Resolve a document key to its folder (sample vs this session's uploads)."""
+    if kind == "sample":
+        return core.SAMPLE_ROOT / slug
+    return session_root() / slug
+
+
+def purge_stale_sessions() -> None:
+    """Delete session directories untouched for over 24 hours."""
+    try:
+        cutoff = time.time() - SESSION_TTL_SECONDS
+        for entry in core.STORE_ROOT.iterdir():
+            if not entry.is_dir() or not SESSION_DIR_RE.match(entry.name):
+                continue
+            if entry.name == st.session_state.session_id:
+                continue
+            if entry.stat().st_mtime < cutoff:
+                shutil.rmtree(entry, ignore_errors=True)
+    except Exception:
+        pass
+
+
+def ingest_bytes(name: str, data: bytes, digest: str) -> Tuple[str, str, Optional[str]]:
+    """Index one PDF into this session's store. Returns (level, message, slug)."""
+    if not data:
+        return "error", f"{name}: file is empty.", None
+    if len(data) > MAX_UPLOAD_MB * 1024 * 1024:
+        return "error", f"{name}: exceeds the {MAX_UPLOAD_MB}MB limit.", None
+
+    slug = core.slugify(name)
+    folder = session_root() / slug
 
     tmp_path = ""
     try:
         tmp_path = extract_pdf_bytes(data)
         text = core.extract_pdf_text(tmp_path)
-    except Exception as exc:
-        return "error", f"{uploaded_file.name}: could not read PDF ({exc})."
+    except Exception:
+        return "error", f"{name}: could not read this PDF.", None
     finally:
         if tmp_path:
             try:
@@ -121,145 +152,144 @@ def ingest_upload(uploaded_file, force: bool) -> Tuple[str, str]:
                 pass
 
     if not text.strip():
-        return "error", f"{uploaded_file.name}: no selectable text (scanned PDF?)."
+        return "error", f"{name}: no selectable text (scanned PDF?).", None
 
     try:
         meta, _ = core.ingest_document(
             folder,
             text,
             embedder,
-            source_name=uploaded_file.name,
-            sha256=core.content_hash(data),
+            source_name=name,
+            sha256=digest,
+            root=session_root(),
         )
-    except Exception as exc:
-        return "error", f"{uploaded_file.name}: indexing failed ({exc})."
-    return "success", f"{uploaded_file.name}: indexed {meta['chunks']} chunks as '{slug}'."
+    except Exception:
+        return "error", f"{name}: indexing failed.", None
+    return "success", f"{name}: indexed {meta['chunks']} chunks.", slug
 
 
-def rebuild_active(slug: str) -> Tuple[str, str]:
-    folder = core.STORE_ROOT / slug
-    source_file = folder / core.TEXT_FILE
-    if not source_file.exists():
-        return "error", "Stored text is missing for this document; re-upload the PDF instead."
-    previous = core.read_meta(folder)
-    try:
-        text = source_file.read_text(encoding="utf8")
-        meta, _ = core.ingest_document(
-            folder,
-            text,
-            embedder,
-            chunk_size=int(previous.get("chunk_size", core.CHUNK_SIZE)),
-            overlap=int(previous.get("chunk_overlap", core.CHUNK_OVERLAP)),
-            source_name=previous.get("source_name"),
-            sha256=previous.get("sha256"),
-        )
-    except Exception as exc:
-        return "error", f"Rebuild failed: {exc}"
-    return "success", f"Rebuilt '{slug}' with {meta['chunks']} chunks."
+def show_sources(sources: List[str]) -> None:
+    with st.expander("Sources"):
+        if not sources:
+            st.caption("No chunks were retrieved.")
+        for position, text in enumerate(sources, start=1):
+            st.markdown(f"**[{position}]** {text}")
 
 
 embedder = load_embedder()
 core.ensure_store()
 
+st.session_state.setdefault("session_id", uuid.uuid4().hex)
 st.session_state.setdefault("history", [])
-st.session_state.setdefault("active_pdf", None)
+st.session_state.setdefault("processed", {})
+st.session_state.setdefault("hashes", set())
+st.session_state.setdefault("active", None)
+purge_stale_sessions()
 
 with st.sidebar:
-    st.header("Documents")
-    if load_groq_client() is None:
-        st.warning("GROQ_API_KEY missing — set it in .env to enable answers.")
+    st.title("Chat with PDF")
 
     uploaded = st.file_uploader("Upload PDF(s)", accept_multiple_files=True, type=["pdf"])
-    force = st.checkbox("Re-ingest even if already indexed", value=False)
-
-    if uploaded and st.button("Ingest", type="primary"):
-        with st.spinner("Extracting text and embedding chunks…"):
-            notices = [ingest_upload(item, force) for item in uploaded]
+    if uploaded:
+        pending = [
+            item for item in uploaded
+            if f"{item.name}:{item.size}" not in st.session_state.processed
+        ]
+        notices: List[Tuple[str, str]] = []
+        newest: Optional[Tuple[str, str]] = None
+        if pending:
+            with st.spinner("Extracting text and embedding chunks…"):
+                for item in pending:
+                    st.session_state.processed[f"{item.name}:{item.size}"] = True
+                    data = item.getvalue()
+                    digest = core.content_hash(data)
+                    if digest in st.session_state.hashes:
+                        notices.append(("info", f"{item.name}: same content already uploaded."))
+                        continue
+                    level, message, slug = ingest_bytes(item.name, data, digest)
+                    notices.append((level, message))
+                    if slug:
+                        st.session_state.hashes.add(digest)
+                        newest = ("user", slug)
+        if newest:
+            st.session_state.active = newest
         for level, message in notices:
             getattr(st, level)(message)
 
-    st.markdown("---")
-    st.subheader("Active document")
-    indexes = core.list_indexes()
-    slugs = [name for name, _ in indexes]
-    if slugs:
-        if st.session_state.active_pdf not in slugs:
-            st.session_state.active_pdf = slugs[0]
-        labels = {name: f"{name} ({meta.get('chunks', '?')} chunks)" for name, meta in indexes}
-        selected = st.selectbox(
-            "Document", options=slugs, format_func=lambda slug: labels.get(slug, slug)
+    samples = core.list_sample_indexes()
+    uploads = core.list_indexes(session_root())
+    docs = [("sample", name, meta) for name, meta in samples]
+    docs += [("user", name, meta) for name, meta in uploads]
+    keys = [(kind, name) for kind, name, _ in docs]
+    labels = {
+        (kind, name): (
+            f"{name} (sample) · {meta.get('chunks', '?')} chunks"
+            if kind == "sample"
+            else f"{name} · {meta.get('chunks', '?')} chunks"
         )
-        st.session_state.active_pdf = selected
-        meta = core.read_meta(core.STORE_ROOT / selected)
-        st.markdown(f"**Folder:** `{selected}`")
-        st.markdown(f"**Chunks:** {meta.get('chunks', '?')}")
-        st.markdown(f"**Embedding model:** {meta.get('embed_model', core.EMBED_MODEL)}")
-        st.markdown(
-            f"**Chunking:** {meta.get('chunk_size', '?')} chars, "
-            f"{meta.get('chunk_overlap', '?')} overlap"
-        )
-        st.markdown(f"**Indexed at:** {meta.get('created_at', '?')}")
-        if st.button("Rebuild index"):
-            with st.spinner("Rebuilding index…"):
-                level, message = rebuild_active(selected)
-            getattr(st, level)(message)
-    else:
-        st.info("No documents indexed yet.")
+        for kind, name, meta in docs
+    }
 
-    st.markdown("---")
-    st.subheader("Data")
-    if st.checkbox("Prepare chunk export") and st.session_state.active_pdf:
-        _, chunks = core.load_index(core.STORE_ROOT / st.session_state.active_pdf)
-        if chunks:
+    if keys:
+        if st.session_state.active not in keys:
+            user_keys = [key for key in keys if key[0] == "user"]
+            st.session_state.active = user_keys[-1] if user_keys else keys[0]
+        if len(keys) == 1:
+            st.write(labels[keys[0]])
+        else:
+            selected = st.selectbox(
+                "Document",
+                options=keys,
+                index=keys.index(st.session_state.active),
+                format_func=lambda key: labels[key],
+            )
+            st.session_state.active = selected
+    else:
+        st.session_state.active = None
+
+    with st.expander("Export"):
+        if st.session_state.history:
             st.download_button(
-                "⬇ chunks.json",
-                data=json.dumps({"chunks": chunks}, indent=2, ensure_ascii=False),
-                file_name=f"{st.session_state.active_pdf}_chunks.json",
+                "⬇ history.txt",
+                data="\n".join(
+                    f"User: {t['user']}\nAssistant: {t['assistant']}\n"
+                    for t in st.session_state.history
+                ),
+                file_name="chat_history.txt",
+                mime="text/plain",
+            )
+            st.download_button(
+                "⬇ history.json",
+                data=json.dumps(st.session_state.history, indent=2, ensure_ascii=False),
+                file_name="chat_history.json",
                 mime="application/json",
             )
-        else:
-            st.error("No chunks found for the active document.")
-
-    if st.button("Clear conversation"):
-        st.session_state.history = []
-
-    if st.session_state.history:
-        st.download_button(
-            "⬇ history.txt",
-            data="\n".join(
-                f"User: {t['user']}\nAssistant: {t['assistant']}\n" for t in st.session_state.history
-            ),
-            file_name="chat_history.txt",
-            mime="text/plain",
-        )
-        st.download_button(
-            "⬇ history.json",
-            data=json.dumps(st.session_state.history, indent=2, ensure_ascii=False),
-            file_name="chat_history.json",
-            mime="application/json",
-        )
+        if st.button("Clear conversation"):
+            st.session_state.history = []
 
 st.title("📘 Chat with PDF")
+st.caption(f"FAISS + SentenceTransformers ({core.EMBED_MODEL}) + Groq ({GROQ_MODEL})")
+
+if not keys:
+    st.info("Upload a PDF in the sidebar to get started.")
 
 for turn in st.session_state.history:
     with st.chat_message("user"):
         st.markdown(turn["user"])
     with st.chat_message("assistant"):
         st.markdown(turn["assistant"])
-        st.caption(f"source: {turn.get('pdf', '-')}")
+        show_sources(turn.get("sources", []))
 
-if not st.session_state.history:
-    st.info("No messages yet — ask a question about the active document.")
-
-question = st.chat_input("Ask a question about the active document…")
+question = st.chat_input("Ask a question about the document…")
 if question:
-    active = st.session_state.active_pdf
+    active = st.session_state.active
     if not active:
-        st.warning("Select or ingest a document first.")
+        st.warning("Upload a PDF in the sidebar first.")
     else:
-        index, chunks = core.load_index(core.STORE_ROOT / active)
+        kind, slug = active
+        index, chunks = core.load_index(doc_folder(kind, slug))
         if index is None:
-            st.error("Index missing for this document. Re-upload the PDF.")
+            st.error("Index missing for this document. Upload the PDF again.")
         else:
             hits = core.retrieve(index, chunks, embedder, question)
             context = "\n\n".join(hit["text"] for hit in hits)
@@ -267,14 +297,12 @@ if question:
             if failure:
                 st.error(failure)
             else:
+                sources = [" ".join(hit["text"].split())[:300] for hit in hits]
                 st.session_state.history.append(
-                    {"user": question, "assistant": reply, "pdf": active}
+                    {"user": question, "assistant": reply, "sources": sources}
                 )
                 with st.chat_message("user"):
                     st.markdown(question)
                 with st.chat_message("assistant"):
                     st.markdown(reply)
-                    st.caption(f"source: {active} · {len(hits)} chunks used")
-
-st.markdown("---")
-st.caption(f"FAISS + SentenceTransformers ({core.EMBED_MODEL}) + Groq ({GROQ_MODEL})")
+                    show_sources(sources)

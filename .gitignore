@@ -13,10 +13,6 @@ venv/
 .venv/
 env/
 ENV/
-Finance/venv/
-Flask/
-Flask/.venv/
-Flask/venv/
 
 # Secrets
 .env
@@ -52,6 +48,10 @@ Thumbs.db
 .vscode/
 *.swp
 
-# Vector stores are rebuilt from source documents; comment the next line out to ship a
-# pre-built index with the repository.
+# Per-session user vector stores (never committed; sample_store/ is the committed sample)
 faiss_store/
+
+# Third-party / local-only subprojects and large inputs
+Flask/
+AIML.pdf
+extracted.txt

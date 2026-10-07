@@ -8,6 +8,7 @@ tested without downloading a real model in CI.
 import numpy as np
 import pytest
 
+import rag_core as core
 from rag_core import chunk_text, retrieve
 
 
@@ -97,3 +98,48 @@ def test_retrieve_returns_empty_when_index_is_none():
 def test_retrieve_returns_empty_when_no_chunks():
     index = _FakeIndex(n_items=0)
     assert retrieve(index, [], _FakeEmbedder(), query="x", k=2) == []
+
+
+# ---------------------------------------------------------------------------
+# build_index / ingest_document (store-root prefixing regression)
+# ---------------------------------------------------------------------------
+
+class _RandomEmbedder:
+    """Fake embedder producing random 8-dim vectors, as specified for path tests."""
+
+    def encode(self, texts, batch_size=64, convert_to_numpy=True, show_progress_bar=False):
+        return np.random.rand(len(texts), 8).astype("float32")
+
+
+def test_ingest_document_relative_folder_not_double_prefixed(monkeypatch, tmp_path):
+    """Regression: STORE_ROOT / 'doc' must not become faiss_store/faiss_store/doc."""
+    monkeypatch.chdir(tmp_path)
+    meta, chunks = core.ingest_document(
+        core.STORE_ROOT / "doc",
+        "some text to chunk and embed " * 10,
+        _RandomEmbedder(),
+    )
+    assert meta["chunks"] == len(chunks)
+    assert [name for name, _ in core.list_indexes()] == ["doc"]
+
+
+def test_list_sample_indexes_returns_empty_when_sample_store_missing(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    assert core.list_sample_indexes() == []
+
+
+def test_list_sample_indexes_lists_valid_sample(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    core.ingest_document(
+        core.SAMPLE_ROOT / "sample-doc",
+        "sample document text " * 10,
+        _RandomEmbedder(),
+        root=core.SAMPLE_ROOT,
+    )
+    assert [name for name, _ in core.list_sample_indexes()] == ["sample-doc"]
+
+
+def test_list_sample_indexes_ignores_incomplete_folders(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / core.SAMPLE_ROOT / "half-built").mkdir(parents=True)
+    assert core.list_sample_indexes() == []
